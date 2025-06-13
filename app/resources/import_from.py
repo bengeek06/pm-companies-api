@@ -11,11 +11,12 @@ from flask import request
 from flask_restful import Resource
 from marshmallow import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
-from app.models import Dummy, db
-from app.schemas import DummySchema
+from app.models import Company, db
+from app.schemas import CompanySchema
 from app.logger import logging
 
-dummy_schema = DummySchema(session=db.session)
+company_schema = CompanySchema(session=db.session)
+
 
 class ImportJSONResource(Resource):
     """
@@ -32,7 +33,7 @@ class ImportJSONResource(Resource):
 
         Expects:
             A file field named 'file' containing a JSON file with a list of
-            dummy items.
+            company items.
 
         Returns:
             dict: A success message indicating the number of records imported,
@@ -57,17 +58,34 @@ class ImportJSONResource(Resource):
             errors = []
             for idx, item in enumerate(data):
                 try:
-                    validated = dummy_schema.load(item)
-                    Dummy.create(
+                    validated = company_schema.load(item)
+                    Company.create(
                         name=validated.name,
-                        description=validated.description
+                        description=validated.description,
+                        logo_url=validated.logo_url,
+                        parent_id=validated.parent_id,
+                        address=validated.address,
+                        email=validated.email,
+                        phone_number=validated.phone_number,
+                        website=validated.website,
+                        registration_number=validated.registration_number,
+                        tax_id=validated.tax_id,
+                        country=validated.country,
+                        city=validated.city,
+                        postal_code=validated.postal_code,
+                        employees_count=validated.employees_count,
                     )
                     count += 1
                 except ValidationError as e:
+                    logging.error(
+                        f"Validation error at item {idx}: {e.messages}"
+                        )
                     errors.append({"index": idx, "error": str(e)})
 
             if errors:
-                logging.warning(f"{len(errors)} errors encountered during import.")
+                logging.warning(
+                    f"{len(errors)} errors encountered during import."
+                    )
                 return {
                     "message": f"{count} records imported, {len(errors)} errors.",
                     "errors": errors
@@ -97,8 +115,8 @@ class ImportCSVResource(Resource):
         Import data from a CSV file uploaded via multipart/form-data.
 
         Expects:
-            A file field named 'file' containing a CSV file with columns: name,
-            description.
+            A file field named 'file' containing a CSV file with columns 
+            matching the Company model (as exported by ExportCSVResource).
 
         Returns:
             dict: A success message indicating the number of records imported,
@@ -122,18 +140,44 @@ class ImportCSVResource(Resource):
             errors = []
             for idx, row in enumerate(reader):
                 try:
-                    validated = dummy_schema.load(row)
-                    Dummy.create(
+                    # Remove fields not accepted by the schema's load method
+                    # and convert empty strings to None
+                    data = {k: (v if v != "" else None) for k, v in row.items()}
+
+                    # Remove 'id', 'created_at', 'updated_at' as they are
+                    # auto-generated
+                    data.pop('id', None)
+                    data.pop('created_at', None)
+                    data.pop('updated_at', None)
+
+                    validated = company_schema.load(data)
+                    Company.create(
                         name=validated.name,
-                        description=validated.description
+                        description=validated.description,
+                        logo_url=validated.logo_url,
+                        parent_id=validated.parent_id,
+                        address=validated.address,
+                        email=validated.email,
+                        phone_number=validated.phone_number,
+                        website=validated.website,
+                        registration_number=validated.registration_number,
+                        tax_id=validated.tax_id,
+                        country=validated.country,
+                        city=validated.city,
+                        postal_code=validated.postal_code,
+                        employees_count=validated.employees_count,
                     )
                     count += 1
                 except ValidationError as e:
-                    logging.error(f"Validation error at row {idx}: {e.messages}")
+                    logging.error(
+                        f"Validation error at row {idx}: {e.messages}"
+                        )
                     errors.append({"index": idx, "error": str(e)})
 
             if errors:
-                logging.warning(f"{len(errors)} errors encountered during import.")
+                logging.warning(
+                    f"{len(errors)} errors encountered during import."
+                    )
                 return {
                     "message": f"{count} records imported, {len(errors)} errors.",
                     "errors": errors

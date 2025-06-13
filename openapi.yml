@@ -1,209 +1,152 @@
 openapi: 3.0.3
 info:
-  title: Dummy API
-  version: '1.0'
-  description: API for managing dummy items.
+  title: PM Companies API
+  version: 1.0.0
+  description: API for managing companies with hierarchical organization, import/export, and configuration endpoints.
 
 servers:
-  - url: http://localhost:5000/
+  - url: http://localhost:5000
 
 paths:
-  /version:
+  /companies:
     get:
-      tags: ["Meta"]
-      summary: Get API version
+      tags:
+        - Companies
+      description: Retrieve a list of companies
+      summary: List all companies
       responses:
         '200':
-          description: Current API version
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  version:
-                    type: string
-                    example: "1.0.0"
-  /config:
-    get:
-      tags: ["Meta"]
-      summary: Get application configuration
-      responses:
-        '200':
-          description: Current application configuration
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  FLASK_ENV:
-                    type: string
-                    example: "development"
-                  DEBUG:
-                    type: string
-                    example: "True"
-                  DATABASE_URI:
-                    type: string
-                    example: "sqlite:///:memory:"
-
-  /dummies:
-    get:
-      tags: ["Dummies"]
-      summary: List all dummy items
-      responses:
-        '200':
-          description: List of dummy items
+          description: List of companies
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Dummy'
+                  $ref: '#/components/schemas/Company'
     post:
-      tags: ["Dummies"]
-      summary: Create a new dummy item
+      tags:
+        - Companies
+      description: Create a new company
+      summary: Create a new company
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DummyCreate'
+              $ref: '#/components/schemas/CompanyInput'
       responses:
         '201':
-          description: Dummy item created
+          description: Company created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Dummy'
+                $ref: '#/components/schemas/Company'
         '400':
           description: Validation error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ValidationError'
-        '500':
-          description: Database error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
 
-  /dummies/{dummy_id}:
-    parameters:
-      - name: dummy_id
-        in: path
-        required: true
-        schema:
-          type: integer
+  /companies/{company_id}:
     get:
-      tags: ["Dummies"]
-      summary: Get a dummy item by ID
+      tags:
+        - Companies
+      description: Retrieve a company by ID
+      summary: Get a company by ID
+      parameters:
+        - in: path
+          name: company_id
+          schema:
+            type: string
+          required: true
       responses:
         '200':
-          description: Dummy item found
+          description: Company found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Dummy'
+                $ref: '#/components/schemas/Company'
         '404':
-          description: Dummy not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          description: Company not found
     put:
-      tags: ["Dummies"]
-      summary: Replace a dummy item by ID
+      tags:
+        - Companies
+      description: Update a company by ID
+      summary: Update a company by ID
+      parameters:
+        - in: path
+          name: company_id
+          schema:
+            type: string
+          required: true
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DummyCreate'
+              $ref: '#/components/schemas/CompanyInput'
       responses:
         '200':
-          description: Dummy item updated
+          description: Company updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Dummy'
+                $ref: '#/components/schemas/Company'
         '400':
-          description: Validation or integrity error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ValidationError'
+          description: Validation error
         '404':
-          description: Dummy not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Database error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          description: Company not found
     patch:
-      tags: ["Dummies"]
-      summary: Partially update a dummy item by ID
+      tags:
+        - Companies
+      description: Partially update a company by ID
+      summary: Partially update a company by ID
+      parameters:
+        - in: path
+          name: company_id
+          schema:
+            type: string
+          required: true
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DummyUpdate'
+              $ref: '#/components/schemas/CompanyInput'
       responses:
         '200':
-          description: Dummy item updated
+          description: Company updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Dummy'
+                $ref: '#/components/schemas/Company'
         '400':
-          description: Validation or integrity error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ValidationError'
+          description: Validation error
         '404':
-          description: Dummy not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Database error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          description: Company not found
     delete:
-      tags: ["Dummies"]
-      summary: Delete a dummy item by ID
+      tags:
+        - Companies
+      description: Delete a company by ID
+      summary: Delete a company by ID
+      parameters:
+        - in: path
+          name: company_id
+          schema:
+            type: string
+          required: true
       responses:
         '204':
-          description: Dummy deleted successfully
+          description: Company deleted
         '404':
-          description: Dummy not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Database error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          description: Company not found
 
   /export/csv:
     get:
-      tags: ["Export"]
-      summary: Export all dummy items as CSV
+      tags:
+        - Export
+      description: Export all companies as CSV
+      summary: Export all companies as CSV
       responses:
         '200':
-          description: CSV file containing all dummy items
+          description: CSV file with all companies
           content:
             text/csv:
               schema:
@@ -212,8 +155,10 @@ paths:
 
   /import/csv:
     post:
-      tags: ["Import"]
-      summary: Import dummy items from a CSV file
+      tags:
+        - Import
+      description: Import companies from a CSV file
+      summary: Import companies from a CSV file
       requestBody:
         required: true
         content:
@@ -227,30 +172,17 @@ paths:
       responses:
         '200':
           description: Import successful
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
         '207':
-          description: Partial success with errors
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ValidationError'
+          description: Partial import with errors
         '400':
-          description: Import failed or validation error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ValidationError'
+          description: Import failed
 
   /import/json:
     post:
-      tags: ['Import']
-      summary: Import dummy items from a JSON file
+      tags:
+        - Import
+      description: Import companies from a JSON file
+      summary: Import companies from a JSON file
       requestBody:
         required: true
         content:
@@ -264,76 +196,128 @@ paths:
       responses:
         '200':
           description: Import successful
+        '207':
+          description: Partial import with errors
+        '400':
+          description: Import failed
+
+  /version:
+    get:
+      tags:
+        - Meta
+      description: Get API version
+      summary: Get API version
+      responses:
+        '200':
+          description: API version
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  message:
+                  version:
                     type: string
-        '207':
-          description: Partial success with errors
+
+  /config:
+    get:
+      tags:
+        - Meta
+      description: Get application configuration
+      summary: Get application configuration
+      responses:
+        '200':
+          description: Application configuration
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ValidationError'
-        '400':
-          description: Import failed or validation error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ValidationError'
+                type: object
+                properties:
+                  FLASK_ENV:
+                    type: string
+                  DEBUG:
+                    type: string
+                  DATABASE_URI:
+                    type: string
 
 components:
   schemas:
-    Dummy:
+    Company:
       type: object
       properties:
         id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        logo_url:
+          type: string
+        parent_id:
+          type: string
+          nullable: true
+        organization_id:
+          type: string
+          nullable: true
+        address:
+          type: string
+        email:
+          type: string
+        phone_number:
+          type: string
+        website:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        is_active:
+          type: boolean
+        registration_number:
+          type: string
+        tax_id:
+          type: string
+        country:
+          type: string
+        city:
+          type: string
+        postal_code:
+          type: string
+        employees_count:
           type: integer
-          example: 1
-        name:
-          type: string
-          example: "Test Dummy"
-        description:
-          type: string
-          example: "A test dummy"
-    DummyCreate:
-      type: object
-      required:
-        - name
-      properties:
-        name:
-          type: string
-          example: "Test Dummy"
-        description:
-          type: string
-          example: "A test dummy"
-    DummyUpdate:
+    CompanyInput:
       type: object
       properties:
         name:
           type: string
-          example: "Updated Dummy"
         description:
           type: string
-          example: "Updated description"
-    Error:
-      type: object
-      properties:
-        message:
+        logo_url:
           type: string
-          example: "Dummy not found"
-        error:
+        parent_id:
           type: string
-          example: "Integrity error"
-    ValidationError:
-      type: object
-      properties:
-        message:
+        organization_id:
           type: string
-          example: "Validation error"
-        errors:
-          type: object
-          additionalProperties: true
-          example: {"name": ["Name must be unique."]}
+        address:
+          type: string
+        email:
+          type: string
+        phone_number:
+          type: string
+        website:
+          type: string
+        registration_number:
+          type: string
+        tax_id:
+          type: string
+        country:
+          type: string
+        city:
+          type: string
+        postal_code:
+          type: string
+        employees_count:
+          type: integer
+        is_active:
+          type: boolean

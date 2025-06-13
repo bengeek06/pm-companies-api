@@ -7,7 +7,7 @@ Routes for the Flask application.
 """
 from flask_restful import Api
 from app.logger import logger
-from app.resources.dummy import DummyResource, DummyListResource
+from app.resources.companies import CompanyResource, CompanyListResource
 from app.resources.version import VersionResource
 from app.resources.config import ConfigResource
 from app.resources.export_to import ExportCSVResource
@@ -22,13 +22,13 @@ def register_routes(app):
         app (Flask): The Flask application instance.
 
     This function creates a Flask-RESTful Api instance, adds the resource
-    endpoints for managing dummy items, and logs the successful registration
-    of routes.
+    endpoints for managing companies items, and logs the successful
+    registration of routes.
     """
     api = Api(app)
 
-    api.add_resource(DummyListResource, '/dummies')
-    api.add_resource(DummyResource, '/dummies/<int:dummy_id>')
+    api.add_resource(CompanyListResource, '/companies')
+    api.add_resource(CompanyResource, '/companies/<string:company_id>')
     api.add_resource(ExportCSVResource, '/export/csv')
     api.add_resource(ImportCSVResource, '/import/csv')
     api.add_resource(ImportJSONResource, '/import/json')

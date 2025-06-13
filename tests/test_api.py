@@ -1,337 +1,334 @@
 import json
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from app.models import Dummy, db
+from app.models import Company, db
+from app.resources.companies import CompanyListResource
 
-# Tests for POST /dummies endpoint
 
-def test_create_dummy(client):
-    """
-    Test the creation of a Dummy object via the API.
-    """
-    response = client.post('/dummies', json={'name': 'Test Dummy'})
+def test_get_companies_empty(client):
+    """GET /companies should return an empty list if no companies exist."""
+    response = client.get("/companies")
+    assert response.status_code == 200
+    assert response.json == []
+
+#
+# Test for POST /companies endpoint
+#
+def test_post_company_valid(client):
+    """POST /companies with valid data should create a company."""
+    data = {
+        "name": "Test Company",
+        "description": "A test company",
+        "email": "test@example.com",
+        "employees_count": 10
+    }
+    response = client.post("/companies", data=json.dumps(data), content_type="application/json")
     assert response.status_code == 201
-    data = json.loads(response.data)
-    assert data['name'] == 'Test Dummy'
-    assert 'id' in data
+    assert response.json["name"] == "Test Company"
+    assert response.json["description"] == "A test company"
+    assert response.json["email"] == "test@example.com"
+    assert response.json["employees_count"] == 10
 
-
-def test_create_dummy_validation_error(client):
-    """
-    Test validation error when creating a Dummy object with missing fields.
-    """
-    response = client.post('/dummies', json={})
+def test_post_company_missing_name(client):
+    """POST /companies without a name should fail validation."""
+    data = {
+        "description": "No name"
+    }
+    response = client.post("/companies", data=json.dumps(data), content_type="application/json")
     assert response.status_code == 400
-    data = json.loads(response.data)
-    assert 'message' in data
-    assert 'errors' in data
-    assert 'name' in data['errors']
+    assert "errors" in response.json
+    assert "name" in response.json["errors"]
 
-def test_create_missing_name(client):
-    """
-    Test creating a Dummy object with a missing name field.
-    """
-    response = client.post('/dummies', json={'description': 'A test dummy without a name'})
+def test_post_company_name_too_long(client):
+    """POST /companies with a name > 100 chars should fail validation."""
+    data = {
+        "name": "A" * 101,
+        "description": "Too long name"
+    }
+    response = client.post("/companies", data=json.dumps(data), content_type="application/json")
     assert response.status_code == 400
-    data = json.loads(response.data)
-    assert 'message' in data
-    assert 'errors' in data
-    assert 'name' in data['errors']
+    assert "errors" in response.json
+    assert "name" in response.json["errors"]
 
-def test_create_duplicate_name(client):
-    """
-    Test creating a Dummy object with a duplicate name.
-    """
-    # First, create a dummy object
-    client.post('/dummies', json={'name': 'Duplicate Dummy'})
+def test_post_company_duplicate_name(client):
+    """POST /companies with a duplicate name should fail validation."""
+    data = {
+        "name": "UniqueName"
+    }
+    # First insert
+    response1 = client.post("/companies", data=json.dumps(data), content_type="application/json")
+    assert response1.status_code == 201
+    # Duplicate insert
+    response2 = client.post("/companies", data=json.dumps(data), content_type="application/json")
+    assert response2.status_code == 400
+    assert "errors" in response2.json
+    assert "name" in response2.json["errors"]
 
-    # Attempt to create another dummy with the same name
-    response = client.post('/dummies', json={'name': 'Duplicate Dummy'})
+def test_post_company_invalid_email(client):
+    """POST /companies with invalid email should fail validation."""
+    data = {
+        "name": "EmailTest",
+        "email": "not-an-email"
+    }
+    response = client.post("/companies", data=json.dumps(data), content_type="application/json")
     assert response.status_code == 400
-    data = json.loads(response.data)
-    assert 'message' in data
-    assert 'errors' in data
-    assert 'name' in data['errors']
+    assert "errors" in response.json
+    assert "email" in response.json["errors"]
 
-def test_create_long_description(client):
-    """
-    Test creating a Dummy object with a description that exceeds the maximum length.
-    """
-    long_description = 'A' * 201  # 201 characters long
-    response = client.post('/dummies', json={'name': 'Test Dummy', 'description': long_description})
+def test_post_company_employees_count_negative(client):
+    """POST /companies with negative employees_count should fail validation."""
+    data = {
+        "name": "NegativeCount",
+        "employees_count": -5
+    }
+    response = client.post("/companies", data=json.dumps(data), content_type="application/json")
     assert response.status_code == 400
-    data = json.loads(response.data)
-    assert 'message' in data
-    assert 'errors' in data
-    assert 'description' in data['errors']
+    assert "errors" in response.json
+    assert "employees_count" in response.json["errors"]
 
+def test_get_companies_with_one(client):
+    """GET /companies should return the created company."""
+    data = {
+        "name": "ListedCompany"
+    }
+    client.post("/companies", data=json.dumps(data), content_type="application/json")
+    response = client.get("/companies")
+    assert response.status_code == 200
+    assert any(c["name"] == "ListedCompany" for c in response.json)
 
-def test_creater_integrity_error(client, monkeypatch):
-    # Fonction qui lève l'exception
+def test_post_integrity_error(client, monkeypatch):
+    """Test that a post raises an IntegrityError."""
     def raise_integrity_error(*args, **kwargs):
         raise IntegrityError("Mocked IntegrityError", None, None)
 
-    # Monkeypatch la méthode commit
+    # Monkeypatch commit method
     monkeypatch.setattr("app.models.db.session.commit", raise_integrity_error)
 
-    response = client.post('/dummies', json={'name': 'Test Dummy'})
+    response = client.post(f'/companies', json={'name': 'Dummy'})
     assert response.status_code == 400
 
 
-def test_create_sqlalchemy_error(client, monkeypatch):
+def test_post_sqlalchemy_error(client, monkeypatch):
+    """Test that a post raises a SQLAlchemyError."""
     def raise_sqlalchemy_error(*args, **kwargs):
         raise SQLAlchemyError("Mocked SQLAlchemyError")
 
     monkeypatch.setattr("app.models.db.session.commit", raise_sqlalchemy_error)
 
-    response = client.post('/dummies', json={'name': 'Test Dummy'})
+    response = client.post(f'/companies', json={'name': 'Dummy'})
     assert response.status_code == 500
 
-
-
-# Tests for GET /dummies endpoint
-
-def test_get_all_dummies(client):
-    """
-    Test retrieving all Dummy objects via the API.
-    """
-    # First, create a dummy object to retrieve
-    dummy = Dummy.create(name='Test Dummy', description='A test dummy')
-    db.session.commit()
-
-    response = client.get('/dummies')
-    assert response.status_code == 200
-    data = json.loads(response.data)
-    assert isinstance(data, list)
-    assert len(data) > 0
-    assert data[0]['id'] == dummy.id
-    assert data[0]['name'] == 'Test Dummy'
-    assert data[0]['description'] == 'A test dummy'
-
-# Tests for GET /dummies/<id> endpoint
-
-def test_get_dummy_by_id(client):
-    """
-    Test retrieving a Dummy object by its ID via the API.
-    """
-    # First, create a dummy object to retrieve
-    dummy = Dummy.create(name='Test Dummy', description='A test dummy')
-    db.session.commit()
-
-    response = client.get(f'/dummies/{dummy.id}')
-    assert response.status_code == 200
-    data = json.loads(response.data)
-    assert data['id'] == dummy.id
-    assert data['name'] == 'Test Dummy'
-    assert data['description'] == 'A test dummy'
-
-
-def test_get_dummy_by_id_not_found(client):
-    """
-    Test retrieving a Dummy object by ID that does not exist.
-    """
-    response = client.get('/dummies/9999')  # Assuming 9999 does not exist
+#
+# Test for GET /companies/<id> endpoint
+#
+def test_get_company_not_found(client):
+    """GET /companies/<id> with unknown id should return 404."""
+    response = client.get("/companies/unknown-id")
     assert response.status_code == 404
-    data = json.loads(response.data)
-    assert 'message' in data
-    assert data['message'] == 'Dummy not found'
+    assert response.json["message"] == "Company not found"
 
-# Tests for PUT /dummies/<id> endpoint
-
-
-def test_update_dummy(client):
-    """
-    Test updating a Dummy object via the API.
-    """
-    # First, create a dummy object to update
-    dummy = Dummy.create(name='Test Dummy', description='A test dummy')
-    db.session.commit()
-
-    response = client.put(f'/dummies/{dummy.id}', json={'name': 'Updated Dummy'})
+def test_get_company_found(client):
+    """GET /companies/<id> should return the company if it exists."""
+    # Create a company first
+    data = {"name": "FindMe"}
+    post_resp = client.post("/companies", data=json.dumps(data), content_type="application/json")
+    company_id = post_resp.json["id"]
+    response = client.get(f"/companies/{company_id}")
     assert response.status_code == 200
-    data = json.loads(response.data)
-    assert data['id'] == dummy.id
-    assert data['name'] == 'Updated Dummy'
-    
-    
-def test_update_dummy_not_found(client):
-    """
-    Test updating a Dummy object that does not exist.
-    """
-    response = client.put('/dummies/9999', json={'name': 'Updated Dummy'})
-    assert response.status_code == 404
-    data = json.loads(response.data)
-    assert 'message' in data
-    assert data['message'] == 'Dummy not found'
-    
-    
-def test_update_dummy_validation_error(client):
-    """
-    Test validation error when updating a Dummy object with invalid data.
-    """
-    # First, create a dummy object to update
-    dummy = Dummy.create(name='Test Dummy', description='A test dummy')
-    db.session.commit()
+    assert response.json["name"] == "FindMe"
 
-    response = client.put(f'/dummies/{dummy.id}', json={})
+def test_put_company_not_found(client):
+    """PUT /companies/<id> with unknown id should return 404."""
+    data = {"name": "Updated"}
+    response = client.put("/companies/unknown-id", data=json.dumps(data), content_type="application/json")
+    assert response.status_code == 404
+    assert response.json["message"] == "Company not found"
+
+def test_put_company_invalid(client):
+    """PUT /companies/<id> with invalid data should return 400."""
+    # Create a company
+    data = {"name": "PutTest"}
+    post_resp = client.post("/companies", data=json.dumps(data), content_type="application/json")
+    company_id = post_resp.json["id"]
+    # Now send invalid data (missing name)
+    response = client.put(f"/companies/{company_id}", data=json.dumps({}), content_type="application/json")
     assert response.status_code == 400
-    data = json.loads(response.data)
-    assert 'message' in data
-    assert 'errors' in data
-    assert 'name' in data['errors']
+    assert "errors" in response.json
+    assert "name" in response.json["errors"]
+
+def test_put_company_valid(client):
+    """PUT /companies/<id> with valid data should update the company."""
+    data = {"name": "PutMe"}
+    post_resp = client.post("/companies", data=json.dumps(data), content_type="application/json")
+    company_id = post_resp.json["id"]
+    update = {"name": "PutMeUpdated", "description": "Updated desc"}
+    response = client.put(f"/companies/{company_id}", data=json.dumps(update), content_type="application/json")
+    assert response.status_code == 200
+    assert response.json["name"] == "PutMeUpdated"
+    assert response.json["description"] == "Updated desc"
 
 def test_update_integrity_error(client, monkeypatch):
-    # Fonction qui lève l'exception
+    """Test that a update raises an IntegrityError."""
     def raise_integrity_error(*args, **kwargs):
         raise IntegrityError("Mocked IntegrityError", None, None)
-    
-    # First, create a dummy object to update
-    dummy = Dummy.create(name='Test Dummy', description='A test dummy')
-    db.session.commit()
 
-    # Monkeypatch la méthode commit
+    # First, create an object to update
+    company = Company.create(name='Test Dummy', description='A test dummy')
+
+    # Monkeypatch commit method
     monkeypatch.setattr("app.models.db.session.commit", raise_integrity_error)
 
-    response = client.put('/dummies/1', json={'name': 'Updated Dummy'})
+    response = client.put(f'/companies/{company.id}', json={'name': 'Updated Dummy'})
     assert response.status_code == 400
 
 
 def test_update_sqlalchemy_error(client, monkeypatch):
+    """Test that a update raises a SQLAlchemyError."""
     def raise_sqlalchemy_error(*args, **kwargs):
         raise SQLAlchemyError("Mocked SQLAlchemyError")
 
-    # First, create a dummy object to update
-    dummy = Dummy.create(name='Test Dummy', description='A test dummy')
-    db.session.commit()
-    
+    # First, create an object to update
+    company = Company.create(name='Test Dummy', description='A test dummy')
+
     monkeypatch.setattr("app.models.db.session.commit", raise_sqlalchemy_error)
 
-    response = client.put('/dummies/1', json={'name': 'Updated Dummy'})
+    response = client.put(f'/companies/{company.id}', json={'name': 'Updated Dummy'})
     assert response.status_code == 500
 
-# Tests for PATCH /dummies/<id> endpoint
 
-def test_partial_update_dummy(client):
-    """
-    Test partially updating a Dummy object via the API.
-    """
-    # First, create a dummy object to update
-    dummy = Dummy.create(name='Test Dummy', description='A test dummy')
-    db.session.commit()
-
-    response = client.patch(f'/dummies/{dummy.id}', json={'description': 'Updated description'})
-    assert response.status_code == 200
-    data = json.loads(response.data)
-    assert data['id'] == dummy.id
-    assert data['name'] == 'Test Dummy'
-    assert data['description'] == 'Updated description'
-
-def test_partial_update_dummy_not_found(client):
-    """
-    Test partially updating a Dummy object that does not exist.
-    """
-    response = client.patch('/dummies/9999', json={'description': 'Updated description'})
+def test_patch_company_not_found(client):
+    """PATCH /companies/<id> with unknown id should return 404."""
+    response = client.patch("/companies/unknown-id", data=json.dumps({"name": "X"}), content_type="application/json")
     assert response.status_code == 404
-    data = json.loads(response.data)
-    assert 'message' in data
-    assert data['message'] == 'Dummy item not found'
 
-def test_partial_update_dummy_validation_error(client):
-    """
-    Test validation error when partially updating a Dummy object with invalid data.
-    """
-    # First, create a dummy object to update
-    dummy = Dummy.create(name='Test Dummy', description='A test dummy')
-    db.session.commit()
-
-    response = client.patch(f'/dummies/{dummy.id}', json={"invalid_field": "Invalid value"})
+def test_patch_company_invalid(client):
+    """PATCH /companies/<id> with invalid data should return 400."""
+    data = {"name": "PatchTest"}
+    post_resp = client.post("/companies", data=json.dumps(data), content_type="application/json")
+    company_id = post_resp.json["id"]
+    # Invalid: name too long
+    response = client.patch(f"/companies/{company_id}", data=json.dumps({"name": "A"*101}), content_type="application/json")
     assert response.status_code == 400
-    data = json.loads(response.data)
-    assert 'message' in data
-    assert 'errors' in data
+    assert "errors" in response.json
+    assert "name" in response.json["errors"]
+
+def test_patch_company_valid(client):
+    """PATCH /companies/<id> with valid data should update the company."""
+    data = {"name": "PatchMe"}
+    post_resp = client.post("/companies", data=json.dumps(data), content_type="application/json")
+    company_id = post_resp.json["id"]
+    patch = {"description": "Patched desc"}
+    response = client.patch(f"/companies/{company_id}", data=json.dumps(patch), content_type="application/json")
+    assert response.status_code == 200
+    assert response.json["description"] == "Patched desc"
+
+def test_patch_company_all_fields(client):
+    """PATCH /companies/<id> should update each field individually."""
+    # Create a company
+    data = {
+        "name": "PatchAll",
+        "description": "desc",
+        "address": "addr",
+        "phone_number": "0123456789",
+        "email": "patch@all.com",
+        "website": "https://patchall.com",
+        "logo_url": "https://patchall.com/logo.png",
+        "registration_number": "REG123",
+        "tax_id": "TAX123",
+        "country": "France",
+        "city": "Paris",
+        "postal_code": "75000",
+        "employees_count": 5,
+        "is_active": True,
+        "organization_id": "org1",
+        "parent_id": None
+    }
+    post_resp = client.post("/companies", data=json.dumps(data), content_type="application/json")
+    company_id = post_resp.json["id"]
+
+    # Patch each field one by one and check the update
+    patch_fields = {
+        "name": "PatchedName",
+        "description": "PatchedDesc",
+        "address": "PatchedAddr",
+        "phone_number": "0987654321",
+        "email": "patched@email.com",
+        "website": "https://patched.com",
+        "logo_url": "https://patched.com/logo.png",
+        "registration_number": "REG999",
+        "tax_id": "TAX999",
+        "country": "Germany",
+        "city": "Berlin",
+        "postal_code": "10115",
+        "employees_count": 42,
+        "is_active": False,
+        "organization_id": "org2",
+        "parent_id": None
+    }
+
+    for field, value in patch_fields.items():
+        patch_data = {field: value}
+        response = client.patch(f"/companies/{company_id}", data=json.dumps(patch_data), content_type="application/json")
+        assert response.status_code == 200
+        assert response.json[field] == value
 
 def test_partial_update_integrity_error(client, monkeypatch):
-    # Fonction qui lève l'exception
+    """Test that a partial update raises an IntegrityError."""
     def raise_integrity_error(*args, **kwargs):
         raise IntegrityError("Mocked IntegrityError", None, None)
-    
-    # First, create a dummy object to update
-    dummy = Dummy.create(name='Test Dummy', description='A test dummy')
-    db.session.commit()
 
-    # Monkeypatch la méthode commit
+    # First, create an object to update
+    company = Company.create(name='Test Dummy', description='A test dummy')
+
+    # Monkeypatch commit method
     monkeypatch.setattr("app.models.db.session.commit", raise_integrity_error)
 
-    response = client.patch('/dummies/1', json={'name': 'Updated Dummy'})
+    response = client.patch(f'/companies/{company.id}', json={'name': 'Updated Dummy'})
     assert response.status_code == 400
 
 
 def test_partial_update_sqlalchemy_error(client, monkeypatch):
+    """Test that a partial update raises a SQLAlchemyError."""
     def raise_sqlalchemy_error(*args, **kwargs):
         raise SQLAlchemyError("Mocked SQLAlchemyError")
 
-    # First, create a dummy object to update
-    dummy = Dummy.create(name='Test Dummy', description='A test dummy')
-    db.session.commit()
-    
+    # First, create an object to update
+    company = Company.create(name='Test Dummy', description='A test dummy')
+
     monkeypatch.setattr("app.models.db.session.commit", raise_sqlalchemy_error)
 
-    response = client.patch('/dummies/1', json={'name': 'Updated Dummy'})
+    response = client.patch(f'/companies/{company.id}', json={'name': 'Updated Dummy'})
     assert response.status_code == 500
 
-
-# Tests for DELETE /dummies/<id> endpoint
-
-def test_delete_dummy(client):
-    """
-    Test deleting a Dummy object via the API.
-    """
-    # First, create a dummy object to delete
-    dummy = Dummy.create(name='Test Dummy', description='A test dummy')
-    db.session.commit()
-
-    response = client.delete(f'/dummies/{dummy.id}')
-    assert response.status_code == 204  # No content on successful deletion
-
-    # Verify that the dummy is deleted
-    response = client.get(f'/dummies/{dummy.id}')
+def test_delete_company_not_found(client):
+    """DELETE /companies/<id> with unknown id should return 404."""
+    response = client.delete("/companies/unknown-id")
     assert response.status_code == 404
-    data = json.loads(response.data)
-    assert 'message' in data
-    assert data['message'] == 'Dummy not found'
+    assert response.json["message"] == "Company not found"
 
-def test_delete_dummy_not_found(client):
-    """
-    Test deleting a Dummy object that does not exist.
-    """
-    response = client.delete('/dummies/9999')  # Assuming 9999 does not exist
-    assert response.status_code == 404
-    data = json.loads(response.data)
-    assert 'message' in data
-    assert data['message'] == 'Dummy not found'
+def test_delete_company_success(client):
+    """DELETE /companies/<id> should delete the company."""
+    data = {"name": "DeleteMe"}
+    post_resp = client.post("/companies", data=json.dumps(data), content_type="application/json")
+    company_id = post_resp.json["id"]
+    response = client.delete(f"/companies/{company_id}")
+    assert response.status_code == 204
+    # Should not be found anymore
+    get_resp = client.get(f"/companies/{company_id}")
+    assert get_resp.status_code == 404
 
 def test_delete_sqlalchemy_error(client, monkeypatch):
+    """DELETE /companies/<id> should handle SQLAlchemy errors gracefully."""
     def raise_sqlalchemy_error(*args, **kwargs):
         raise SQLAlchemyError("Mocked SQLAlchemyError")
 
     # First, create a dummy object to delete
-    dummy = Dummy.create(name='Test Dummy', description='A test dummy')
-    db.session.commit()
-    
+    company = Company.create(name='Test Dummy', description='A test dummy')
+
     monkeypatch.setattr("app.models.db.session.commit", raise_sqlalchemy_error)
 
-    response = client.delete(f'/dummies/{dummy.id}')
+    response = client.delete(f'/companies/{company.id}')
     assert response.status_code == 500
     data = json.loads(response.data)
     assert 'message' in data
     assert 'error' in data
     assert data['message'] == 'Database error'
-
-
-
-def test_model_repr():
-    """
-    Test the __repr__ method of the Dummy model.
-    """
-    dummy = Dummy(name='Test Dummy', description='A test dummy')
-    expected_repr = f"<Dummy {dummy.name}> (ID: {dummy.id}, Description: {dummy.description})"
-    assert repr(dummy) == expected_repr
